@@ -16,7 +16,7 @@ while (<>) {
     commit(@commits);
 }
 
-my %column;
+my %commitColumn;
 my @columnStatus;
 my $lastCount;
 my $commitColumn;
@@ -29,14 +29,14 @@ my @commits;
 sub commit {
     @commits = @_;
     my ($commit, $parent, @parent) = @_;
-    $commitColumn = $column{$commit} //= newColumn();
+    $commitColumn = $commitColumn{$commit} //= newColumn();
     $columnStatus[$commitColumn] //= 1;
-    $parentColumn = defined $parent ? $column{$parent} //= $column{$commit} : undef;
+    $parentColumn = defined $parent ? $commitColumn{$parent} //= $commitColumn{$commit} : undef;
     $columnStatus[$parentColumn] //= 2 if defined $parentColumn;
     @parentColumn = ();
     foreach my $parent2 (@parent) {
-        push(@parentColumn, $column{$parent2} //= newColumn());
-        $columnStatus[$column{$parent2}] //= 2;
+        push(@parentColumn, $commitColumn{$parent2} //= newColumn());
+        $columnStatus[$commitColumn{$parent2}] //= 2;
     }
     $count = columnCount();
     printLine();
@@ -45,7 +45,7 @@ sub commit {
 }
 
 sub reset {
-    %column       = ();
+    %commitColumn       = ();
     @columnStatus       = ();
     $lastCount    = undef;
     $commitColumn = undef;
