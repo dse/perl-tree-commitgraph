@@ -9,7 +9,7 @@ while (<>) {
     next if m{^\s*$};           # skip blank lines
     s{#.*$}{};                  # remove comments from end of line
     if (m{^\s*---\s*$}) {       # end of graph; start over
-        reset();
+        initState();
         next;
     }
     my (@commits) = split(' ', $_);
@@ -24,6 +24,7 @@ my $firstParentColumn;
 my @otherParentColumn;
 my $columnCount;
 my @commits;
+initState();
 
 sub commit {
     @commits = @_;
@@ -45,7 +46,7 @@ sub commit {
     do { $_ = 1 if defined $_ && $_ == 2 } foreach @columnStatus;
 }
 
-sub reset {
+sub initState {
     %commitColumn       = ();
     @columnStatus       = ();
     $lastColumnCount    = undef;
