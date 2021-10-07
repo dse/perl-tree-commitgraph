@@ -17,7 +17,7 @@ while (<>) {
 }
 
 my %column;
-my @column;
+my @columnStatus;
 my $lastCount;
 my $commitColumn;
 my $parentColumn;
@@ -30,23 +30,23 @@ sub commit {
     @commits = @_;
     my ($commit, $parent, @parent) = @_;
     $commitColumn = $column{$commit} //= newColumn();
-    $column[$commitColumn] //= 1;
+    $columnStatus[$commitColumn] //= 1;
     $parentColumn = defined $parent ? $column{$parent} //= $column{$commit} : undef;
-    $column[$parentColumn] //= 2 if defined $parentColumn;
+    $columnStatus[$parentColumn] //= 2 if defined $parentColumn;
     @parentColumn = ();
     foreach my $parent2 (@parent) {
         push(@parentColumn, $column{$parent2} //= newColumn());
-        $column[$column{$parent2}] //= 2;
+        $columnStatus[$column{$parent2}] //= 2;
     }
     $count = columnCount();
     printLine();
     printDiagonals();
-    do { $_ = 1 if defined $_ && $_ == 2 } foreach @column;
+    do { $_ = 1 if defined $_ && $_ == 2 } foreach @columnStatus;
 }
 
 sub reset {
     %column       = ();
-    @column       = ();
+    @columnStatus       = ();
     $lastCount    = undef;
     $commitColumn = undef;
     $parentColumn = undef;
@@ -57,16 +57,16 @@ sub reset {
 }
 
 sub newColumn {
-    for (my $i = 0; $i < scalar @column; $i += 1) {
-        return $i if !defined $column[$i];
+    for (my $i = 0; $i < scalar @columnStatus; $i += 1) {
+        return $i if !defined $columnStatus[$i];
     }
-    return scalar @column;
+    return scalar @columnStatus;
 }
 
 sub columnCount {
     my $count = 0;
-    for (my $i = 0; $i < scalar @column; $i += 1) {
-        $count = $i + 1 if defined $column[$i];
+    for (my $i = 0; $i < scalar @columnStatus; $i += 1) {
+        $count = $i + 1 if defined $columnStatus[$i];
     }
     return $count;
 }
@@ -76,9 +76,9 @@ sub printLine {
         print('  ') if $i;
         if ($i == $commitColumn) {
             print('*');
-        } elsif (!defined $column[$i]) {
+        } elsif (!defined $columnStatus[$i]) {
             print(' ');
-        } elsif ($column[$i] == 1) {
+        } elsif ($columnStatus[$i] == 1) {
             print('|');
         } else {
             print(' ');
@@ -96,7 +96,7 @@ sub printDiagonals {
     @dest = ($parentColumn, @parentColumn);
 
     if (!grep { $_ eq $commitColumn } @dest) {
-        $column[$commitColumn] = undef;
+        $columnStatus[$commitColumn] = undef;
     }
 
     my @diagonalDest = grep { $_ ne $commitColumn } @dest;
@@ -130,8 +130,8 @@ sub printDiagonals {
             substr($diagonal1, $commitColumn * 3, 1) = '|';
             substr($diagonal2, $commitColumn * 3, 1) = '|';
         }
-        for (my $i = 0; $i < scalar @column; $i += 1) {
-            if (defined $column[$i] && $column[$i] == 1) {
+        for (my $i = 0; $i < scalar @columnStatus; $i += 1) {
+            if (defined $columnStatus[$i] && $columnStatus[$i] == 1) {
                 substr($diagonal1, $i * 3, 1) = '|';
                 substr($diagonal2, $i * 3, 1) = '|';
             }
