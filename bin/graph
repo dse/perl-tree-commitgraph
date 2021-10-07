@@ -23,7 +23,6 @@ my $thisCommitColumn;           # this commit's column
 my $firstParentColumn;
 my @otherParentColumn;
 my $columnCount;
-my @dest;
 my @commits;
 
 sub commit {
@@ -48,12 +47,11 @@ sub reset {
     %commitColumn       = ();
     @columnStatus       = ();
     $lastColumnCount    = undef;
-    $thisCommitColumn = undef;
-    $firstParentColumn = undef;
-    @otherParentColumn = ();
+    $thisCommitColumn   = undef;
+    $firstParentColumn  = undef;
+    @otherParentColumn  = ();
     $columnCount        = undef;
-    @dest         = ();
-    @commits      = ();
+    @commits            = ();
 }
 
 sub newColumn {
@@ -91,7 +89,7 @@ sub printDiagonals {
     if (!defined $firstParentColumn) {
         return;
     }
-    @dest = ($firstParentColumn, @otherParentColumn);
+    my @dest = ($firstParentColumn, @otherParentColumn);
 
     if (!grep { $_ eq $thisCommitColumn } @dest) {
         $columnStatus[$thisCommitColumn] = undef;
