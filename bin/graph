@@ -16,26 +16,26 @@ while (<>) {
     commit(@commits);
 }
 
-my %commitColumn;
-my @columnStatus;
-my $lastColumnCount;
-my $commitColumn;
-my $parentColumn;
-my @parentColumn;
+my %commitColumn;               # commit id -> column number hash
+my @columnStatus;               # column number -> status (2 = new column; 1 = active column)
+my $lastColumnCount;            # for determining each graph line's width
+my $thisCommitColumn;           # this commit's column
+my $firstParentColumn;
+my @otherParentColumn;
 my $columnCount;
 my @dest;
 my @commits;
 
 sub commit {
     @commits = @_;
-    my ($commit, $parent, @parent) = @_;
-    $commitColumn = $commitColumn{$commit} //= newColumn();
-    $columnStatus[$commitColumn] //= 1;
-    $parentColumn = defined $parent ? $commitColumn{$parent} //= $commitColumn{$commit} : undef;
-    $columnStatus[$parentColumn] //= 2 if defined $parentColumn;
-    @parentColumn = ();
+    my ($commit, $firstParent, @parent) = @_;
+    $thisCommitColumn = $commitColumn{$commit} //= newColumn();
+    $columnStatus[$thisCommitColumn] //= 1;
+    $firstParentColumn = defined $firstParent ? $commitColumn{$firstParent} //= $commitColumn{$commit} : undef;
+    $columnStatus[$firstParentColumn] //= 2 if defined $firstParentColumn;
+    @otherParentColumn = ();
     foreach my $parent2 (@parent) {
-        push(@parentColumn, $commitColumn{$parent2} //= newColumn());
+        push(@otherParentColumn, $commitColumn{$parent2} //= newColumn());
         $columnStatus[$commitColumn{$parent2}] //= 2;
     }
     $columnCount = columnCount();
@@ -48,9 +48,9 @@ sub reset {
     %commitColumn       = ();
     @columnStatus       = ();
     $lastColumnCount    = undef;
-    $commitColumn = undef;
-    $parentColumn = undef;
-    @parentColumn = ();
+    $thisCommitColumn = undef;
+    $firstParentColumn = undef;
+    @otherParentColumn = ();
     $columnCount        = undef;
     @dest         = ();
     @commits      = ();
@@ -74,7 +74,7 @@ sub columnCount {
 sub printLine {
     for (my $i = 0; $i < $columnCount; $i += 1) {
         print('  ') if $i;
-        if ($i == $commitColumn) {
+        if ($i == $thisCommitColumn) {
             print('*');
         } elsif (!defined $columnStatus[$i]) {
             print(' ');
@@ -88,27 +88,27 @@ sub printLine {
 }
 
 sub printDiagonals {
-    if (!defined $parentColumn) {
+    if (!defined $firstParentColumn) {
         return;
     }
-    @dest = ($parentColumn, @parentColumn);
+    @dest = ($firstParentColumn, @otherParentColumn);
 
-    if (!grep { $_ eq $commitColumn } @dest) {
-        $columnStatus[$commitColumn] = undef;
+    if (!grep { $_ eq $thisCommitColumn } @dest) {
+        $columnStatus[$thisCommitColumn] = undef;
     }
 
-    my @diagonalDest = grep { $_ ne $commitColumn } @dest;
+    my @diagonalDest = grep { $_ ne $thisCommitColumn } @dest;
     if (scalar @diagonalDest) {
         my $maxCount = $columnCount;
         $maxCount = max($columnCount, $lastColumnCount) if defined $lastColumnCount;
         my $textColumnCount = $maxCount * 3 - 2;
         my $diagonal1 = ' ' x $textColumnCount;
         my $diagonal2 = ' ' x $textColumnCount;
-        my @leftDest  = grep { $_ < $commitColumn } @diagonalDest;
-        my @rightDest = grep { $_ > $commitColumn } @diagonalDest;
+        my @leftDest  = grep { $_ < $thisCommitColumn } @diagonalDest;
+        my @rightDest = grep { $_ > $thisCommitColumn } @diagonalDest;
         if (scalar @leftDest) {
             my $leftmost = min(@leftDest);
-            my $c1 = $commitColumn * 3 - 1;
+            my $c1 = $thisCommitColumn * 3 - 1;
             my $c2 = $leftmost * 3 + 1;
             my $ucount = $c1 - $c2 - 1;
             substr($diagonal1, $c2 + 1, $ucount) = ('_' x $ucount);
@@ -117,16 +117,16 @@ sub printDiagonals {
         }
         if (scalar @rightDest) {
             my $rightmost = max(@rightDest);
-            my $c1 = $commitColumn * 3 + 1;
+            my $c1 = $thisCommitColumn * 3 + 1;
             my $c2 = $rightmost * 3 - 1;
             my $ucount = $c2 - $c1 - 1;
             substr($diagonal1, $c1, 1) = '\\';
             substr($diagonal1, $c1 + 1, $ucount) = ('_' x $ucount);
             substr($diagonal2, $_ * 3 - 1, 1) = '\\' foreach @rightDest;
         }
-        if (grep { $_ eq $commitColumn } @dest) {
-            substr($diagonal1, $commitColumn * 3, 1) = '|';
-            substr($diagonal2, $commitColumn * 3, 1) = '|';
+        if (grep { $_ eq $thisCommitColumn } @dest) {
+            substr($diagonal1, $thisCommitColumn * 3, 1) = '|';
+            substr($diagonal2, $thisCommitColumn * 3, 1) = '|';
         }
         for (my $i = 0; $i < scalar @columnStatus; $i += 1) {
             if (defined $columnStatus[$i] && $columnStatus[$i] == 1) {
