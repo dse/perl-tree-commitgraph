@@ -27,15 +27,17 @@ my @commits;
 
 sub commit {
     @commits = @_;
-    my ($commit, $firstParent, @parent) = @_;
+    my ($commit, $firstParent, @otherParent) = @_;
     $thisCommitColumn = $commitColumn{$commit} //= newColumn();
     $columnStatus[$thisCommitColumn] //= 1;
-    $firstParentColumn = defined $firstParent ? $commitColumn{$firstParent} //= $commitColumn{$commit} : undef;
+    $firstParentColumn = defined $firstParent ?
+      $commitColumn{$firstParent} //= $commitColumn{$commit} :
+      undef;
     $columnStatus[$firstParentColumn] //= 2 if defined $firstParentColumn;
     @otherParentColumn = ();
-    foreach my $parent2 (@parent) {
-        push(@otherParentColumn, $commitColumn{$parent2} //= newColumn());
-        $columnStatus[$commitColumn{$parent2}] //= 2;
+    foreach my $otherParent (@otherParent) {
+        push(@otherParentColumn, $commitColumn{$otherParent} //= newColumn());
+        $columnStatus[$commitColumn{$otherParent}] //= 2;
     }
     $columnCount = columnCount();
     printLine();
