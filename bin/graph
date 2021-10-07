@@ -18,11 +18,11 @@ while (<>) {
 
 my %commitColumn;
 my @columnStatus;
-my $lastCount;
+my $lastColumnCount;
 my $commitColumn;
 my $parentColumn;
 my @parentColumn;
-my $count;
+my $columnCount;
 my @dest;
 my @commits;
 
@@ -38,7 +38,7 @@ sub commit {
         push(@parentColumn, $commitColumn{$parent2} //= newColumn());
         $columnStatus[$commitColumn{$parent2}] //= 2;
     }
-    $count = columnCount();
+    $columnCount = columnCount();
     printLine();
     printDiagonals();
     do { $_ = 1 if defined $_ && $_ == 2 } foreach @columnStatus;
@@ -47,11 +47,11 @@ sub commit {
 sub reset {
     %commitColumn       = ();
     @columnStatus       = ();
-    $lastCount    = undef;
+    $lastColumnCount    = undef;
     $commitColumn = undef;
     $parentColumn = undef;
     @parentColumn = ();
-    $count        = undef;
+    $columnCount        = undef;
     @dest         = ();
     @commits      = ();
 }
@@ -72,7 +72,7 @@ sub columnCount {
 }
 
 sub printLine {
-    for (my $i = 0; $i < $count; $i += 1) {
+    for (my $i = 0; $i < $columnCount; $i += 1) {
         print('  ') if $i;
         if ($i == $commitColumn) {
             print('*');
@@ -88,8 +88,6 @@ sub printLine {
 }
 
 sub printDiagonals {
-    my $count = columnCount();
-
     if (!defined $parentColumn) {
         return;
     }
@@ -101,8 +99,8 @@ sub printDiagonals {
 
     my @diagonalDest = grep { $_ ne $commitColumn } @dest;
     if (scalar @diagonalDest) {
-        my $maxCount = $count;
-        $maxCount = max($count, $lastCount) if defined $lastCount;
+        my $maxCount = $columnCount;
+        $maxCount = max($columnCount, $lastColumnCount) if defined $lastColumnCount;
         my $textColumnCount = $maxCount * 3 - 2;
         my $diagonal1 = ' ' x $textColumnCount;
         my $diagonal2 = ' ' x $textColumnCount;
