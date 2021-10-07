@@ -1,0 +1,143 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use List::Util qw(max min);
+
+while (<>) {
+    next if m{^\s*\#};          # skip comments;
+    next if m{^\s*$};           # skip blank lines
+    s{#.*$}{};                  # remove comments from end of line
+    if (m{^\s*---\s*$}) {       # end of graph; start over
+        reset();
+        next;
+    }
+    my (@commits) = split(' ', $_);
+    commit(@commits);
+}
+
+my %column;
+my @column;
+my $lastCount;
+my $commitColumn;
+my $parentColumn;
+my @parentColumn;
+my $count;
+my @dest;
+my @commits;
+
+sub commit {
+    @commits = @_;
+    my ($commit, $parent, @parent) = @_;
+    $commitColumn = $column{$commit} //= newColumn();
+    $column[$commitColumn] //= 1;
+    $parentColumn = defined $parent ? $column{$parent} //= $column{$commit} : undef;
+    $column[$parentColumn] //= 2 if defined $parentColumn;
+    @parentColumn = ();
+    foreach my $parent2 (@parent) {
+        push(@parentColumn, $column{$parent2} //= newColumn());
+        $column[$column{$parent2}] //= 2;
+    }
+    $count = columnCount();
+    printLine();
+    printDiagonals();
+    do { $_ = 1 if defined $_ && $_ == 2 } foreach @column;
+}
+
+sub reset {
+    %column       = ();
+    @column       = ();
+    $lastCount    = undef;
+    $commitColumn = undef;
+    $parentColumn = undef;
+    @parentColumn = ();
+    $count        = undef;
+    @dest         = ();
+    @commits      = ();
+}
+
+sub newColumn {
+    for (my $i = 0; $i < scalar @column; $i += 1) {
+        return $i if !defined $column[$i];
+    }
+    return scalar @column;
+}
+
+sub columnCount {
+    my $count = 0;
+    for (my $i = 0; $i < scalar @column; $i += 1) {
+        $count = $i + 1 if defined $column[$i];
+    }
+    return $count;
+}
+
+sub printLine {
+    for (my $i = 0; $i < $count; $i += 1) {
+        print('  ') if $i;
+        if ($i == $commitColumn) {
+            print('*');
+        } elsif (!defined $column[$i]) {
+            print(' ');
+        } elsif ($column[$i] == 1) {
+            print('|');
+        } else {
+            print(' ');
+        }
+    }
+    print("  @commits\n");
+}
+
+sub printDiagonals {
+    my $count = columnCount();
+
+    if (!defined $parentColumn) {
+        return;
+    }
+    @dest = ($parentColumn, @parentColumn);
+
+    if (!grep { $_ eq $commitColumn } @dest) {
+        $column[$commitColumn] = undef;
+    }
+
+    my @diagonalDest = grep { $_ ne $commitColumn } @dest;
+    if (scalar @diagonalDest) {
+        my $maxCount = $count;
+        $maxCount = max($count, $lastCount) if defined $lastCount;
+        my $textColumnCount = $maxCount * 3 - 2;
+        my $diagonal1 = ' ' x $textColumnCount;
+        my $diagonal2 = ' ' x $textColumnCount;
+        my @leftDest  = grep { $_ < $commitColumn } @diagonalDest;
+        my @rightDest = grep { $_ > $commitColumn } @diagonalDest;
+        if (scalar @leftDest) {
+            my $leftmost = min(@leftDest);
+            my $c1 = $commitColumn * 3 - 1;
+            my $c2 = $leftmost * 3 + 1;
+            my $ucount = $c1 - $c2 - 1;
+            substr($diagonal1, $c2 + 1, $ucount) = ('_' x $ucount);
+            substr($diagonal1, $c1, 1) = '/';
+            substr($diagonal2, $_ * 3 + 1, 1) = '/' foreach @leftDest;
+        }
+        if (scalar @rightDest) {
+            my $rightmost = max(@rightDest);
+            my $c1 = $commitColumn * 3 + 1;
+            my $c2 = $rightmost * 3 - 1;
+            my $ucount = $c2 - $c1 - 1;
+            substr($diagonal1, $c1, 1) = '\\';
+            substr($diagonal1, $c1 + 1, $ucount) = ('_' x $ucount);
+            substr($diagonal2, $_ * 3 - 1, 1) = '\\' foreach @rightDest;
+        }
+        if (grep { $_ eq $commitColumn } @dest) {
+            substr($diagonal1, $commitColumn * 3, 1) = '|';
+            substr($diagonal2, $commitColumn * 3, 1) = '|';
+        }
+        for (my $i = 0; $i < scalar @column; $i += 1) {
+            if (defined $column[$i] && $column[$i] == 1) {
+                substr($diagonal1, $i * 3, 1) = '|';
+                substr($diagonal2, $i * 3, 1) = '|';
+            }
+        }
+
+        print("$diagonal1\n");
+        print("$diagonal2\n");
+    }
+}
