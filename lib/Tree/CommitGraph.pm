@@ -56,7 +56,7 @@ sub processCommit {
     }
     $self->{columnCount} = $self->columnCount();
     $self->printLine();
-    $self->printDiagonalLines();
+    $self->printExtraLines();
     $self->printLines();
 
     do { $_ = undef   if defined $_ && $_ == WILLDIE  } foreach @{$self->{columnStatus}};
@@ -74,9 +74,9 @@ sub initState {
     $self->{otherParentColumn} = [];
     $self->{columnCount}       = undef;
     $self->{commitAndParents}  = [];
-    $self->{diagonalLine1}     = undef;
-    $self->{diagonalLine2}     = undef;
-    $self->{diagonalLine3}     = undef;
+    $self->{extraLine1}     = undef;
+    $self->{extraLine2}     = undef;
+    $self->{extraLine3}     = undef;
 }
 
 sub newColumn {
@@ -99,9 +99,11 @@ sub columnCount {
 sub printLines {
     my ($self) = @_;
     print($self->{commitLine}, "\n");
-    print($self->{diagonalLine1}, "\n") if defined $self->{diagonalLine1};
-    print($self->{diagonalLine2}, "\n") if defined $self->{diagonalLine2};
-    print($self->{diagonalLine3}, "\n") if defined $self->{diagonalLine3};
+    if ($self->{hasDiagonals}) {
+        print($self->{extraLine1}, "\n") if defined $self->{extraLine1};
+        print($self->{extraLine2}, "\n") if defined $self->{extraLine2};
+    }
+    print($self->{extraLine3}, "\n") if defined $self->{extraLine3};
 }
 
 sub printLine {
@@ -124,7 +126,7 @@ sub printLine {
     $self->{commitLine} = $commitLine;
 }
 
-sub printDiagonalLines {
+sub printExtraLines {
     my ($self) = @_;
     if (!defined $self->{firstParentColumn}) {
         return;
@@ -139,15 +141,18 @@ sub printDiagonalLines {
         $self->{columnStatus}->[$self->{thisCommitColumn}] = undef;
     }
 
+    my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
+    my $textColumnCount = $maxCount * 3 - 2;
+
     # diagonal lines from this commit to parents.  If there aren't
-    # any, we don't need to print the diagonal lines at all.
+    # any, we may not need to print the extra lines at all.
     my @diagonalDest = grep { $_ ne $self->{thisCommitColumn} } @dest;
     if (scalar @diagonalDest) {
-        my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
-        my $textColumnCount = $maxCount * 3 - 2;
-        my $diagonal1 = ' ' x $textColumnCount;
-        my $diagonal2 = ' ' x $textColumnCount;
-        my $diagonal3 = ' ' x $textColumnCount;
+        $self->{hasDiagonals} = 1;
+
+        my $extra1 = ' ' x $textColumnCount;
+        my $extra2 = ' ' x $textColumnCount;
+        my $extra3 = ' ' x $textColumnCount;
 
         # / lines go to these columns
         my @leftDest  = grep { $_ < $self->{thisCommitColumn} } @diagonalDest;
@@ -156,9 +161,9 @@ sub printDiagonalLines {
             my $c1 = $self->{thisCommitColumn} * 3 - 1;
             my $c2 = $leftmost * 3 + 1;
             my $ucount = $c1 - $c2 - 1;
-            substr($diagonal1, $c2 + 1, $ucount) = ('_' x $ucount);
-            substr($diagonal1, $c1, 1) = '/';
-            substr($diagonal2, $_ * 3 + 1, 1) = '/' foreach @leftDest;
+            substr($extra1, $c2 + 1, $ucount) = ('_' x $ucount);
+            substr($extra1, $c1, 1) = '/';
+            substr($extra2, $_ * 3 + 1, 1) = '/' foreach @leftDest;
         }
 
         # \ lines go to these columns
@@ -168,38 +173,51 @@ sub printDiagonalLines {
             my $c1 = $self->{thisCommitColumn} * 3 + 1;
             my $c2 = $rightmost * 3 - 1;
             my $ucount = $c2 - $c1 - 1;
-            substr($diagonal1, $c1, 1) = '\\';
-            substr($diagonal1, $c1 + 1, $ucount) = ('_' x $ucount);
-            substr($diagonal2, $_ * 3 - 1, 1) = '\\' foreach @rightDest;
+            substr($extra1, $c1, 1) = '\\';
+            substr($extra1, $c1 + 1, $ucount) = ('_' x $ucount);
+            substr($extra2, $_ * 3 - 1, 1) = '\\' foreach @rightDest;
         }
 
         # is there a parent in this column?
         if (grep { $_ eq $self->{thisCommitColumn} } @dest) {
-            substr($diagonal1, $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($diagonal2, $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($diagonal3, $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extra1, $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extra2, $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extra3, $self->{thisCommitColumn} * 3, 1) = '|';
         }
 
         # draw the other lines that go straight down
         for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
             if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
-                substr($diagonal1, $i * 3, 1) = '|';
-                substr($diagonal2, $i * 3, 1) = '|';
-                substr($diagonal3, $i * 3, 1) = '|';
+                substr($extra1, $i * 3, 1) = '|';
+                substr($extra2, $i * 3, 1) = '|';
+                substr($extra3, $i * 3, 1) = '|';
             }
         }
 
         foreach my $column (@dest) {
-            substr($diagonal3, $column * 3, 1) = '|';
+            substr($extra3, $column * 3, 1) = '|';
         }
 
-        $self->{diagonalLine1} = $diagonal1;
-        $self->{diagonalLine2} = $diagonal2;
-        $self->{diagonalLine3} = $diagonal3;
+        $self->{extraLine1} = $extra1;
+        $self->{extraLine2} = $extra2;
+        $self->{extraLine3} = $extra3;
     } else {
-        $self->{diagonalLine1} = undef;
-        $self->{diagonalLine2} = undef;
-        $self->{diagonalLine3} = undef;
+        $self->{hasDiagonals} = 0;
+
+        my $line = ' ' x $textColumnCount;
+
+        # draw the other lines that go straight down
+        for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
+            if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
+                substr($line, $i * 3, 1) = '|';
+                substr($line, $i * 3, 1) = '|';
+                substr($line, $i * 3, 1) = '|';
+            }
+        }
+
+        $self->{extraLine1} = $line;
+        $self->{extraLine2} = $line;
+        $self->{extraLine3} = $line;
     }
     $self->{lastColumnCount} = $self->{columnCount};
 }
