@@ -15,7 +15,10 @@ sub new {
     my $self = bless({}, $class);
     $self->{padding} = 32;
     $self->{mark} = {};
+    $self->{revmark} = {};
     $self->{isatty} = 0;
+    $self->{columnWidth} = 3;
+    $self->{started} = 0;
     $self->initState();
     return $self;
 }
@@ -38,8 +41,19 @@ sub parseLine {
     $self->processCommit(commit => $commit, parents => \@parents);
 }
 
+sub start {
+    my ($self) = @_;
+    return if $self->{started};
+    $self->{started} = 1;
+    my $nmarks = scalar keys %{$self->{mark}};
+    if ($nmarks >= 3) {
+        $self->{columnWidth} = 1 + $nmarks;
+    }
+}
+
 sub processCommit {
     my ($self, %args) = @_;
+    $self->start();
     my $commit = $args{commit};
     my @parents = defined $args{parents} ? @{$args{parents}} : ();
     my $line = $args{line};
@@ -140,28 +154,29 @@ sub setFirstGraphLine {
                           $self->{lastColumnCount} // 0);
     my $graphLine = '';
     for (my $i = 0; $i < $columnCount; $i += 1) {
-        $graphLine .= '  ' if $i;
         if ($i == $self->{thisCommitColumn}) {
-            if (defined $self->{mark} && exists $self->{mark}->{$self->{commit}}) {
-                $graphLine .= "\e[1m" if $self->{isatty};
-                $graphLine .= $self->{mark}->{$self->{commit}};
-                $graphLine .= "\e[0m" if $self->{isatty};
+            if (defined $self->{revmark} && exists $self->{revmark}->{$self->{commit}}) {
+                my @key = sort keys %{$self->{revmark}->{$self->{commit}}};
+                my $key = join('', @key);
+                my $HILIT = $self->{isatty} ? "\e[1m" : "";
+                my $RESET = $self->{isatty} ? "\e[0m" : "";
+                $graphLine .= $self->terminalPadEnd("${HILIT}${key}${RESET}", $self->{columnWidth});
             } else {
-                $graphLine .= '*';
+                $graphLine .= '*  ';
             }
         } elsif (!defined $self->{columnStatus}->[$i]) {
-            $graphLine .= ' ';
+            $graphLine .= '   ';
         } elsif ($self->{columnStatus}->[$i] == 1) {
-            $graphLine .= '|';
+            $graphLine .= '|  ';
         } else {
-            $graphLine .= ' ';
+            $graphLine .= '   ';
         }
     }
     push(@{$self->{graphLines}}, $graphLine);
     push(@{$self->{graphLinesSaved}}, $graphLine);
 
     my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
-    my $textColumnCount = $maxCount * 3 - 2;
+    my $textColumnCount = $maxCount * $self->{columnWidth};
 
     $self->{graphContinuationLine} = ' ' x $textColumnCount;
 }
@@ -182,13 +197,15 @@ sub setExtraGraphLines {
     }
 
     my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
-    my $textColumnCount = $maxCount * 3 - 2;
+    my $textColumnCount = $maxCount * $self->{columnWidth};
 
     # diagonal lines from this commit to parents.  If there aren't
     # any, we may not need to print the extra lines at all.
     my @diagonalDest = grep { $_ ne $self->{thisCommitColumn} } @dest;
     if (scalar @diagonalDest) {
         $self->{hasDiagonals} = 1;
+
+        my @extraLines = (' ' x $textColumnCount) x $self->{columnWidth};
 
         my $extraLine1 = ' ' x $textColumnCount;
         my $extraLine2 = ' ' x $textColumnCount;
@@ -201,9 +218,9 @@ sub setExtraGraphLines {
             my $c1 = $self->{thisCommitColumn} * 3 - 1;
             my $c2 = $leftmost * 3 + 1;
             my $ucount = $c1 - $c2 - 1;
-            substr($extraLine1, $c2 + 1, $ucount) = ('_' x $ucount);
-            substr($extraLine1, $c1, 1) = '/';
-            substr($extraLine2, $_ * 3 + 1, 1) = '/' foreach @leftDest;
+            substr($extraLines[0], $c2 + 1, $ucount) = ('_' x $ucount);
+            substr($extraLines[0], $c1, 1) = '/';
+            substr($extraLines[1], $_ * 3 + 1, 1) = '/' foreach @leftDest;
         }
 
         # \ lines go to these columns
@@ -213,33 +230,33 @@ sub setExtraGraphLines {
             my $c1 = $self->{thisCommitColumn} * 3 + 1;
             my $c2 = $rightmost * 3 - 1;
             my $ucount = $c2 - $c1 - 1;
-            substr($extraLine1, $c1, 1) = '\\';
-            substr($extraLine1, $c1 + 1, $ucount) = ('_' x $ucount);
-            substr($extraLine2, $_ * 3 - 1, 1) = '\\' foreach @rightDest;
+            substr($extraLines[0], $c1, 1) = '\\';
+            substr($extraLines[0], $c1 + 1, $ucount) = ('_' x $ucount);
+            substr($extraLines[1], $_ * 3 - 1, 1) = '\\' foreach @rightDest;
         }
 
         # is there a parent in this column?
         if (grep { $_ eq $self->{thisCommitColumn} } @dest) {
-            substr($extraLine1, $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($extraLine2, $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($extraLine3, $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extraLines[0], $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extraLines[1], $self->{thisCommitColumn} * 3, 1) = '|';
+            substr($extraLines[2], $self->{thisCommitColumn} * 3, 1) = '|';
         }
 
         # draw the other lines that go straight down
         for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
             if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
-                substr($extraLine1, $i * 3, 1) = '|';
-                substr($extraLine2, $i * 3, 1) = '|';
-                substr($extraLine3, $i * 3, 1) = '|';
+                substr($extraLines[0], $i * 3, 1) = '|';
+                substr($extraLines[1], $i * 3, 1) = '|';
+                substr($extraLines[2], $i * 3, 1) = '|';
             }
         }
 
         foreach my $column (@dest) {
-            substr($extraLine3, $column * 3, 1) = '|';
+            substr($extraLines[2], $column * 3, 1) = '|';
         }
-        push(@{$self->{graphLines}},      $extraLine1, $extraLine2);
-        push(@{$self->{graphLinesSaved}}, $extraLine1, $extraLine2);
-        $self->{graphContinuationLine} = $extraLine3;
+        push(@{$self->{graphLines}},      $extraLines[0], $extraLines[1]);
+        push(@{$self->{graphLinesSaved}}, $extraLines[0], $extraLines[1]);
+        $self->{graphContinuationLine} = $extraLines[2];
     } else {
         $self->{hasDiagonals} = 0;
         my $extraLine = ' ' x $textColumnCount;
@@ -260,6 +277,16 @@ sub stringLengthExcludingControlSequences {
     my ($self, $string) = @_;
     $string =~ s{\e\[.*?m}{}g;
     return length($string);
+}
+
+sub terminalPadEnd {
+    my ($self, $string, $cols) = @_;
+    my $length = $self->stringLengthExcludingControlSequences($string);
+    my $add = $cols - $length;
+    if ($add > 0) {
+        return $string . (' ' x $add);
+    }
+    return $string;
 }
 
 1;
