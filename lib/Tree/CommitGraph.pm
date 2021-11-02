@@ -17,7 +17,6 @@ sub new {
     $self->{mark} = {};
     $self->{revmark} = {};
     $self->{isatty} = 0;
-    $self->{columnWidth} = 3;
     $self->{started} = 0;
     $self->initState();
     return $self;
@@ -46,8 +45,8 @@ sub start {
     return if $self->{started};
     $self->{started} = 1;
     my $nmarks = scalar keys %{$self->{mark}};
-    if ($nmarks >= 3) {
-        $self->{columnWidth} = 1 + $nmarks;
+    if ($nmarks >= 2) {
+        $self->{columnWidth} = 2 + $nmarks;
     }
 }
 
@@ -154,23 +153,26 @@ sub setFirstGraphLine {
                           $self->{lastColumnCount} // 0);
     my $graphLine = '';
     for (my $i = 0; $i < $columnCount; $i += 1) {
+        my $append = ' ' x $self->{columnWidth};
+
         if ($i == $self->{thisCommitColumn}) {
             if (defined $self->{revmark} && exists $self->{revmark}->{$self->{commit}}) {
                 my @key = sort keys %{$self->{revmark}->{$self->{commit}}};
                 my $key = join('', @key);
                 my $HILIT = $self->{isatty} ? "\e[1m" : "";
                 my $RESET = $self->{isatty} ? "\e[0m" : "";
-                $graphLine .= $self->terminalPadEnd("${HILIT}${key}${RESET}", $self->{columnWidth});
+                $append = $self->terminalPadEnd("*${HILIT}${key}${RESET}", $self->{columnWidth});
             } else {
-                $graphLine .= '*  ';
+                substr($append, 0, 1) = '*';
             }
         } elsif (!defined $self->{columnStatus}->[$i]) {
-            $graphLine .= '   ';
+            # no change
         } elsif ($self->{columnStatus}->[$i] == 1) {
-            $graphLine .= '|  ';
+            substr($append, 0, 1) = '|';
         } else {
-            $graphLine .= '   ';
+            # no change
         }
+        $graphLine .= $append;
     }
     push(@{$self->{graphLines}}, $graphLine);
     push(@{$self->{graphLinesSaved}}, $graphLine);
@@ -196,8 +198,11 @@ sub setExtraGraphLines {
         $self->{columnStatus}->[$self->{thisCommitColumn}] = undef;
     }
 
+    my $cw = $self->{columnWidth};
+    my $secondLast = $cw - 2;
+
     my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
-    my $textColumnCount = $maxCount * $self->{columnWidth};
+    my $textColumnCount = $maxCount * $cw;
 
     # diagonal lines from this commit to parents.  If there aren't
     # any, we may not need to print the extra lines at all.
@@ -205,67 +210,63 @@ sub setExtraGraphLines {
     if (scalar @diagonalDest) {
         $self->{hasDiagonals} = 1;
 
-        my @extraLines = (' ' x $textColumnCount) x $self->{columnWidth};
-
-        my $extraLine1 = ' ' x $textColumnCount;
-        my $extraLine2 = ' ' x $textColumnCount;
-        my $extraLine3 = ' ' x $textColumnCount;
+        my @extraLines = (' ' x $textColumnCount) x 3;
 
         # / lines go to these columns
         my @leftDest  = grep { $_ < $self->{thisCommitColumn} } @diagonalDest;
         if (scalar @leftDest) {
             my $leftmost = min(@leftDest);
-            my $c1 = $self->{thisCommitColumn} * 3 - 1;
-            my $c2 = $leftmost * 3 + 1;
+            my $c1 = $self->{thisCommitColumn} * $cw - 1;
+            my $c2 = $leftmost * $cw + 1;
             my $ucount = $c1 - $c2 - 1;
             substr($extraLines[0], $c2 + 1, $ucount) = ('_' x $ucount);
             substr($extraLines[0], $c1, 1) = '/';
-            substr($extraLines[1], $_ * 3 + 1, 1) = '/' foreach @leftDest;
+            substr($extraLines[1], $_ * $cw + 1, 1) = '/' foreach @leftDest; # FIXME
         }
 
         # \ lines go to these columns
         my @rightDest = grep { $_ > $self->{thisCommitColumn} } @diagonalDest;
         if (scalar @rightDest) {
             my $rightmost = max(@rightDest);
-            my $c1 = $self->{thisCommitColumn} * 3 + 1;
-            my $c2 = $rightmost * 3 - 1;
+            my $c1 = $self->{thisCommitColumn} * $cw + 1;
+            my $c2 = $rightmost * $cw - 1;
             my $ucount = $c2 - $c1 - 1;
-            substr($extraLines[0], $c1, 1) = '\\';
             substr($extraLines[0], $c1 + 1, $ucount) = ('_' x $ucount);
-            substr($extraLines[1], $_ * 3 - 1, 1) = '\\' foreach @rightDest;
+            substr($extraLines[0], $c1, 1) = '\\';
+            substr($extraLines[1], $_ * $cw - 1, 1) = '\\' foreach @rightDest; # FIXME
         }
 
         # is there a parent in this column?
         if (grep { $_ eq $self->{thisCommitColumn} } @dest) {
-            substr($extraLines[0], $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($extraLines[1], $self->{thisCommitColumn} * 3, 1) = '|';
-            substr($extraLines[2], $self->{thisCommitColumn} * 3, 1) = '|';
+            for (my $j = 0; $j < 3; $j += 1) {
+                substr($extraLines[$j], $self->{thisCommitColumn} * $cw, 1) = '|';
+            }
         }
 
         # draw the other lines that go straight down
         for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
             if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
-                substr($extraLines[0], $i * 3, 1) = '|';
-                substr($extraLines[1], $i * 3, 1) = '|';
-                substr($extraLines[2], $i * 3, 1) = '|';
+                for (my $j = 0; $j < 3; $j += 1) {
+                    substr($extraLines[$j], $i * $cw, 1) = '|';
+                }
             }
         }
 
         foreach my $column (@dest) {
-            substr($extraLines[2], $column * 3, 1) = '|';
+            substr($extraLines[2], $column * $cw, 1) = '|';
         }
-        push(@{$self->{graphLines}},      $extraLines[0], $extraLines[1]);
-        push(@{$self->{graphLinesSaved}}, $extraLines[0], $extraLines[1]);
-        $self->{graphContinuationLine} = $extraLines[2];
+
+        my $lastExtraLine = splice(@extraLines, -1, 1);
+        push(@{$self->{graphLines}},      @extraLines);
+        push(@{$self->{graphLinesSaved}}, @extraLines);
+        $self->{graphContinuationLine} = $lastExtraLine;
     } else {
         $self->{hasDiagonals} = 0;
         my $extraLine = ' ' x $textColumnCount;
         # draw the lines that go straight down
         for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
             if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
-                substr($extraLine, $i * 3, 1) = '|';
-                substr($extraLine, $i * 3, 1) = '|';
-                substr($extraLine, $i * 3, 1) = '|';
+                substr($extraLine, $i * $cw, 1) = '|';
             }
         }
         $self->{graphContinuationLine} = $extraLine;
