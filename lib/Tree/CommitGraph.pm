@@ -132,24 +132,25 @@ sub setFirstGraphLine {
     my ($self) = @_;
     my $columnCount = max($self->{columnCount},
                           $self->{lastColumnCount} // 0);
-    my $commitLine = '';
+    my $graphLine = '';
     for (my $i = 0; $i < $columnCount; $i += 1) {
-        $commitLine .= '  ' if $i;
+        $graphLine .= '  ' if $i;
         if ($i == $self->{thisCommitColumn}) {
-            $commitLine .= $self->{mark}->{$self->{commit}} // '*';
+            $graphLine .= $self->{mark}->{$self->{commit}} // '*';
         } elsif (!defined $self->{columnStatus}->[$i]) {
-            $commitLine .= ' ';
+            $graphLine .= ' ';
         } elsif ($self->{columnStatus}->[$i] == 1) {
-            $commitLine .= '|';
+            $graphLine .= '|';
         } else {
-            $commitLine .= ' ';
+            $graphLine .= ' ';
         }
     }
-    push(@{$self->{graphLines}}, $commitLine);
-    push(@{$self->{graphLinesSaved}}, $commitLine);
+    push(@{$self->{graphLines}}, $graphLine);
+    push(@{$self->{graphLinesSaved}}, $graphLine);
 
     my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
     my $textColumnCount = $maxCount * 3 - 2;
+
     $self->{graphContinuationLine} = ' ' x $textColumnCount;
 }
 
@@ -238,7 +239,7 @@ sub setExtraGraphLines {
                 substr($extraLine, $i * 3, 1) = '|';
             }
         }
-        $self->{graphLineContinue} = $extraLine;
+        $self->{graphContinuationLine} = $extraLine;
     }
     $self->{lastColumnCount} = $self->{columnCount};
 }
