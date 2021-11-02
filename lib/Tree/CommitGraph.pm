@@ -18,6 +18,7 @@ sub new {
     $self->{revmark} = {};
     $self->{isatty} = 0;
     $self->{started} = 0;
+    $self->{columnWidth} = 3;
     $self->initState();
     return $self;
 }
