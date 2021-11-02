@@ -15,6 +15,7 @@ sub new {
     my $self = bless({}, $class);
     $self->{padding} = 32;
     $self->{mark} = {};
+    $self->{isatty} = 0;
     $self->initState();
     return $self;
 }
@@ -85,7 +86,12 @@ sub printCommitLine {
     } else {
         $graphLine = $self->{graphContinuationLine};
     }
-    $graphLine = sprintf('%-*s', $self->{padding}, $graphLine . '  ');
+    $graphLine .= '  ';
+    my $length = $self->stringLengthExcludingControlSequences($graphLine);
+    my $additionalSpaceCount = $self->{padding} - $length;
+    if ($additionalSpaceCount > 0) {
+        $graphLine .= ' ' x $additionalSpaceCount;
+    }
     print($graphLine . $line . "\n");
 }
 
@@ -136,7 +142,13 @@ sub setFirstGraphLine {
     for (my $i = 0; $i < $columnCount; $i += 1) {
         $graphLine .= '  ' if $i;
         if ($i == $self->{thisCommitColumn}) {
-            $graphLine .= $self->{mark}->{$self->{commit}} // '*';
+            if (defined $self->{mark} && exists $self->{mark}->{$self->{commit}}) {
+                $graphLine .= "\e[1m" if $self->{isatty};
+                $graphLine .= $self->{mark}->{$self->{commit}};
+                $graphLine .= "\e[0m" if $self->{isatty};
+            } else {
+                $graphLine .= '*';
+            }
         } elsif (!defined $self->{columnStatus}->[$i]) {
             $graphLine .= ' ';
         } elsif ($self->{columnStatus}->[$i] == 1) {
@@ -242,6 +254,12 @@ sub setExtraGraphLines {
         $self->{graphContinuationLine} = $extraLine;
     }
     $self->{lastColumnCount} = $self->{columnCount};
+}
+
+sub stringLengthExcludingControlSequences {
+    my ($self, $string) = @_;
+    $string =~ s{\e\[.*?m}{}g;
+    return length($string);
 }
 
 1;
