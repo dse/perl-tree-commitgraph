@@ -13,6 +13,8 @@ use constant WILLDIE  => 4;
 sub new {
     my ($class) = @_;
     my $self = bless({}, $class);
+    $self->{padding} = 32;
+    $self->{mark} = {};
     $self->initState();
     return $self;
 }
@@ -20,31 +22,36 @@ sub new {
 # for testing
 sub parseLine {
     my ($self, $line) = @_;
+    $line =~ s{\R\z}{};            # safer chomp;
     return if $line =~ m{^\s*\#};  # skip comments;
     return if $line =~ m{^\s*$};   # skip blank lines
     $line =~ s{#.*$}{};            # remove comments from end of line
-    if ($line =~ m{^\s*---\s*$}) { # end of graph; start a new one
+    $line =~ s{^\s+}{};
+    $line =~ s{\s+$}{};
+    if ($line =~ m{^\s*---+\s*$}) { # end of graph; start a new one
         $self->initState();
         print("---\n");
         return;
     }
-    my (@commitAndParents) = split(' ', $line);
-    $self->processCommit(@commitAndParents);
+    my ($commit, @parents) = split(' ', $line);
+    $self->processCommit(commit => $commit, parents => \@parents);
 }
 
 sub processCommit {
-    my ($self, @commitAndParents) = @_;
-    my ($commit, @parent) = @commitAndParents;
-    my ($firstParent, @otherParent) = @parent;
+    my ($self, %args) = @_;
+    my $commit = $args{commit};
+    my @parents = defined $args{parents} ? @{$args{parents}} : ();
+    my $line = $args{line};
+    my ($firstParent, @otherParent) = @parents;
 
-    @{$self->{commitAndParents}} = @commitAndParents;
+    $self->{commit} = $commit;
     $self->{thisCommitColumn} = $self->{commitColumn}->{$commit} //= $self->newColumn();
     $self->{columnStatus}->[$self->{thisCommitColumn}] //= ACTIVE;
     $self->{firstParentColumn} = defined $firstParent ?
       $self->{commitColumn}->{$firstParent} //= $self->{commitColumn}->{$commit} :
       undef;
 
-    if (!scalar @parent) {
+    if (!scalar @parents) {
         $self->{columnStatus}->[$self->{thisCommitColumn}] = ORPHANED;
     }
 
@@ -55,13 +62,31 @@ sub processCommit {
         $self->{columnStatus}->[$self->{commitColumn}->{$otherParent}] //= NEW;
     }
     $self->{columnCount} = $self->columnCount();
-    $self->printLine();
-    $self->printExtraLines();
-    $self->printLines();
+    $self->setGraphLines();
 
     do { $_ = undef   if defined $_ && $_ == WILLDIE  } foreach @{$self->{columnStatus}};
     do { $_ = WILLDIE if defined $_ && $_ == ORPHANED } foreach @{$self->{columnStatus}};
     do { $_ = ACTIVE  if defined $_ && $_ == NEW      } foreach @{$self->{columnStatus}};
+}
+
+sub endCommit {
+    my ($self) = @_;
+    while (scalar @{$self->{graphLines}}) {
+        my $graphLine = shift(@{$self->{graphLines}});
+        print($graphLine . "\n");
+    }
+}
+
+sub printCommitLine {
+    my ($self, $line) = @_;
+    my $graphLine;
+    if (scalar @{$self->{graphLines}}) {
+        $graphLine = shift(@{$self->{graphLines}});
+    } else {
+        $graphLine = $self->{graphContinuationLine};
+    }
+    $graphLine = sprintf('%-*s', $self->{padding}, $graphLine . '  ');
+    print($graphLine . $line . "\n");
 }
 
 sub initState {
@@ -73,10 +98,8 @@ sub initState {
     $self->{firstParentColumn} = undef;
     $self->{otherParentColumn} = [];
     $self->{columnCount}       = undef;
-    $self->{commitAndParents}  = [];
-    $self->{extraLine1}     = undef;
-    $self->{extraLine2}     = undef;
-    $self->{extraLine3}     = undef;
+    $self->{commit}            = undef;
+    $self->{parents}           = [];
 }
 
 sub newColumn {
@@ -96,17 +119,16 @@ sub columnCount {
     return $count;
 }
 
-sub printLines {
+sub setGraphLines {
     my ($self) = @_;
-    print($self->{commitLine}, "\n");
-    if ($self->{hasDiagonals}) {
-        print($self->{extraLine1}, "\n") if defined $self->{extraLine1};
-        print($self->{extraLine2}, "\n") if defined $self->{extraLine2};
-    }
-    print($self->{extraLine3}, "\n") if defined $self->{extraLine3};
+    $self->{graphLines} = [];
+    $self->{graphLinesSaved} = [];
+    $self->{graphContinuationLine} = undef;
+    $self->setFirstGraphLine();
+    $self->setExtraGraphLines();
 }
 
-sub printLine {
+sub setFirstGraphLine {
     my ($self) = @_;
     my $columnCount = max($self->{columnCount},
                           $self->{lastColumnCount} // 0);
@@ -114,7 +136,7 @@ sub printLine {
     for (my $i = 0; $i < $columnCount; $i += 1) {
         $commitLine .= '  ' if $i;
         if ($i == $self->{thisCommitColumn}) {
-            $commitLine .= '*';
+            $commitLine .= $self->{mark}->{$self->{commit}} // '*';
         } elsif (!defined $self->{columnStatus}->[$i]) {
             $commitLine .= ' ';
         } elsif ($self->{columnStatus}->[$i] == 1) {
@@ -123,10 +145,15 @@ sub printLine {
             $commitLine .= ' ';
         }
     }
-    $self->{commitLine} = $commitLine;
+    push(@{$self->{graphLines}}, $commitLine);
+    push(@{$self->{graphLinesSaved}}, $commitLine);
+
+    my $maxCount = max($self->{columnCount}, $self->{lastColumnCount} // 0);
+    my $textColumnCount = $maxCount * 3 - 2;
+    $self->{graphContinuationLine} = ' ' x $textColumnCount;
 }
 
-sub printExtraLines {
+sub setExtraGraphLines {
     my ($self) = @_;
     if (!defined $self->{firstParentColumn}) {
         return;
@@ -197,15 +224,12 @@ sub printExtraLines {
         foreach my $column (@dest) {
             substr($extraLine3, $column * 3, 1) = '|';
         }
-
-        $self->{extraLine1} = $extraLine1;
-        $self->{extraLine2} = $extraLine2;
-        $self->{extraLine3} = $extraLine3;
+        push(@{$self->{graphLines}},      $extraLine1, $extraLine2);
+        push(@{$self->{graphLinesSaved}}, $extraLine1, $extraLine2);
+        $self->{graphContinuationLine} = $extraLine3;
     } else {
         $self->{hasDiagonals} = 0;
-
         my $extraLine = ' ' x $textColumnCount;
-
         # draw the lines that go straight down
         for (my $i = 0; $i < scalar @{$self->{columnStatus}}; $i += 1) {
             if (defined $self->{columnStatus}->[$i] && $self->{columnStatus}->[$i] == ACTIVE) {
@@ -214,10 +238,7 @@ sub printExtraLines {
                 substr($extraLine, $i * 3, 1) = '|';
             }
         }
-
-        $self->{extraLine1} = $extraLine;
-        $self->{extraLine2} = $extraLine;
-        $self->{extraLine3} = $extraLine;
+        $self->{graphLineContinue} = $extraLine;
     }
     $self->{lastColumnCount} = $self->{columnCount};
 }
