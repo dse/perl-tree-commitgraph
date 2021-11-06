@@ -19,6 +19,10 @@ sub new {
     $self->{isatty} = 0;
     $self->{started} = 0;
     $self->{columnWidth} = 3;
+
+    $self->{compactify} = 0;
+    $self->{compactifyContextLines} = 0;
+
     $self->initState();
     return $self;
 }
@@ -59,18 +63,22 @@ sub processCommit {
     my $line = $args{line};
     my ($firstParent, @otherParent) = @parents;
 
+    my $graphChange = 0;
+    $graphChange = 1 if scalar @parents != 1; # commit with no parents, or merge commit
+
     $self->{commit} = $commit;
-    $self->{thisCommitColumn} = $self->{commitColumn}->{$commit} //= $self->newColumn();
+    $self->{thisCommitColumn} = $self->{commitColumn}->{$commit} //= do { $graphChange = 1; $self->newColumn() };
     $self->{columnStatus}->[$self->{thisCommitColumn}] //= ACTIVE;
     $self->{firstParentColumn} = defined $firstParent ?
       $self->{commitColumn}->{$firstParent} //= $self->{commitColumn}->{$commit} :
       undef;
+    $graphChange = 1 if defined $firstParent && $self->{commitColumn}->{$firstParent} != $self->{commitColumn}->{$commit};
 
     if (!scalar @parents) {
         $self->{columnStatus}->[$self->{thisCommitColumn}] = ORPHANED;
     }
 
-    $self->{columnStatus}->[$self->{firstParentColumn}] //= NEW if defined $self->{firstParentColumn};
+    $self->{columnStatus}->[$self->{firstParentColumn}] //= do { $graphChange = 1; NEW } if defined $self->{firstParentColumn};
     @{$self->{otherParentColumn}} = ();
     foreach my $otherParent (@otherParent) {
         push(@{$self->{otherParentColumn}}, $self->{commitColumn}->{$otherParent} //= $self->newColumn());
@@ -78,6 +86,7 @@ sub processCommit {
     }
     $self->{columnCount} = $self->columnCount();
     $self->setGraphLines();
+    $self->{graphChange} = $graphChange;
 
     do { $_ = undef   if defined $_ && $_ == WILLDIE  } foreach @{$self->{columnStatus}};
     do { $_ = WILLDIE if defined $_ && $_ == ORPHANED } foreach @{$self->{columnStatus}};
