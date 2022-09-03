@@ -10,6 +10,11 @@ use constant NEW      => 2;
 use constant ORPHANED => 3;
 use constant WILLDIE  => 4;
 
+use fields qw(padding mark revmark isatty started columnWidth compactify compactifyContextLines);
+
+use lib "..";                   # for emacs
+use Tree::CommitGraph::Util qw(clone stringLengthExcludingControlSequences terminalPadEnd);
+
 sub new {
     my ($class) = @_;
     my $self = bless({}, $class);
@@ -110,7 +115,7 @@ sub printCommitLine {
         $graphLine = $self->{graphContinuationLine};
     }
     $graphLine .= '  ';
-    my $length = $self->stringLengthExcludingControlSequences($graphLine);
+    my $length = stringLengthExcludingControlSequences($graphLine);
     my $additionalSpaceCount = $self->{padding} - $length;
     if ($additionalSpaceCount > 0) {
         $graphLine .= ' ' x $additionalSpaceCount;
@@ -282,22 +287,6 @@ sub setExtraGraphLines {
         $self->{graphContinuationLine} = $extraLine;
     }
     $self->{lastColumnCount} = $self->{columnCount};
-}
-
-sub stringLengthExcludingControlSequences {
-    my ($self, $string) = @_;
-    $string =~ s{\e\[.*?m}{}g;
-    return length($string);
-}
-
-sub terminalPadEnd {
-    my ($self, $string, $cols) = @_;
-    my $length = $self->stringLengthExcludingControlSequences($string);
-    my $add = $cols - $length;
-    if ($add > 0) {
-        return $string . (' ' x $add);
-    }
-    return $string;
 }
 
 1;
