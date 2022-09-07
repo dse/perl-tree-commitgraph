@@ -5,7 +5,7 @@ use strict;
 use base 'Exporter';
 
 our @EXPORT = qw();
-our @EXPORT_OK = qw(clone stringLengthExcludingControlSequences terminalPadEnd);
+our @EXPORT_OK = qw(clone stringLengthExcludingControlSequences terminalPadEnd diagonalsAndLines);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
 sub clone {
@@ -41,5 +41,7 @@ sub terminalPadEnd {
     }
     return $string;
 }
+
+use List::Util qw(max);
 
 1;
