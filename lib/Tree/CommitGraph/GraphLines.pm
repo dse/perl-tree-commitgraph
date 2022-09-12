@@ -4,10 +4,6 @@ use strict;
 
 use base 'Exporter';
 
-our @EXPORT = qw(verticals diagonals);
-our @EXPORT_OK = qw();
-our %EXPORT_TAGS = (all => [@EXPORT_OK]);
-
 use List::Util qw(min max);
 
 sub new {
