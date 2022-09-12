@@ -27,6 +27,7 @@ sub commit {
     $self->{otherParents} = \@otherParents;
     my $thisState = $self->{thisState} //= Tree::CommitGraph::State->new();
     my $nextState = $self->{nextState} //= Tree::CommitGraph::State->new();
+    $thisState->setFirstParent($firstParent);
     if (!defined $thisState->getColumn($commit)) {
         $thisState->setColumn($commit, $self->firstAvailableColumn($thisState->values, $nextState->values));
         if (defined $firstParent) {
@@ -51,6 +52,7 @@ sub commit {
             if ($nextState->getColumn($commit) != $thisState->getColumn($commit)) {
                 $nextNextState = $nextState->clone();
                 $nextState->setColumn($commit, $thisState->getColumn($commit)); # intermediate state
+                $nextState->setFirstParent($firstParent);
             }
         }
         foreach my $otherParent (@otherParents) {
@@ -87,9 +89,14 @@ sub commit {
     if (defined $nextNextState) {
         $self->graphlines($self->diagonals($nextState, $nextNextState, currentcolumn => $nextState->getColumn($commit)));
     }
+
     $thisState->deleteColumn($commit);
     $nextState->deleteColumn($commit);
     $nextNextState->deleteColumn($commit) if defined $nextNextState;
+    $thisState->deleteFirstParent();
+    $nextState->deleteFirstParent();
+    $nextNextState->deleteFirstParent() if defined $nextNextState;
+
     $thisState->setfrom($nextNextState // $nextState);
 }
 

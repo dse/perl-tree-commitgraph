@@ -34,9 +34,9 @@ sub verticals {
 
 sub diagonals {
     my ($self, $state1, $state2, %args) = @_;
-    my @state1 = $state1->values;
-    my @state2 = $state2->values;
     my $maxcol = max($state1->values, $state2->values);
+    my @attrs1 = ('' x (3 * $maxcol + 1));
+    my @attrs2 = ('' x (3 * $maxcol + 1));
     my $line1 = ' ' x (3 * $maxcol + 1);
     my $line2 = ' ' x (3 * $maxcol + 1);
     my @commits = grep { defined $state2->getColumn($_) } $state1->keys;
@@ -44,6 +44,31 @@ sub diagonals {
     my @diagonalcommits = grep { $state1->getColumn($_) != $state2->getColumn($_) } @commits;
     if (!scalar @diagonalcommits) {
         return;
+    }
+    my $firstParent = $state1->getFirstParent();
+    my $line1column = $state1->getColumn($firstParent);
+    my $line2column = $state2->getColumn($firstParent);
+    if (defined $line2column && defined $line1column) {
+        if ($line2column < $line1column) {
+            $attrs1[$line1column * 3 - 1] = "\e[1;33m";
+            $attrs2[$line2column * 3 + 1] = "\e[1;33m";
+            my $pos1 = $line2column * 3 + 2;
+            my $pos2 = $line1column * 3 - 2;
+            for (my $col = $pos1; $col <= $pos2; $col += 1) {
+                $attrs1[$col] = "\e[1;33m";
+            }
+        } elsif ($line2column > $line1column) {
+            $attrs1[$line1column * 3 + 1] = "\e[1;33m";
+            $attrs2[$line2column * 3 - 1] = "\e[1;33m";
+            my $pos1 = $line1column * 3 + 2;
+            my $pos2 = $line2column * 3 - 2;
+            for (my $col = $pos1; $col <= $pos2; $col += 1) {
+                $attrs1[$col] = "\e[1;33m";
+            }
+        } else {
+            $attrs1[$line1column * 3] = "\e[1;33m";
+            $attrs2[$line2column * 3] = "\e[1;33m";
+        }
     }
     my @diagonalorigins = map { $state1->getColumn($_) } @diagonalcommits;
     my %diagonalorigins = map { ($_ => 1) } @diagonalorigins;
@@ -79,7 +104,25 @@ sub diagonals {
         substr($line1, $col * 3, 1) = '|';
         substr($line2, $col * 3, 1) = '|';
     }
+    # $line1 = addAttributes($line1, @attrs1);
+    # $line2 = addAttributes($line2, @attrs2);
     return ($line1, $line2);
+}
+
+sub addAttributes {
+    my ($line, @attrs) = @_;
+    for (my $col = scalar(@attrs); $col >= 0; $col -= 1) {
+        my $b = ($col == scalar(@attrs) ? '' : $attrs[$col]) // '';
+        my $a = ($col == 0              ? '' : $attrs[$col - 1]) // '';
+        if ($b ne $a) {
+            if ($b eq '') {
+                substr($line, $col, 0) = "\e[0m";
+            } else {
+                substr($line, $col, 0) = $b;
+            }
+        }
+    }
+    return $line;
 }
 
 1;

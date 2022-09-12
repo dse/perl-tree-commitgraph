@@ -52,6 +52,26 @@ sub clone {
     return __PACKAGE__->new(source => $self);
 }
 
+sub setFirstParent {
+    my ($self, $firstParent) = @_;
+    $self->{firstParent} = $firstParent;
+}
+
+sub getFirstParent {
+    my ($self) = @_;
+    return $self->{firstParent};
+}
+
+sub deleteFirstParent {
+    my ($self) = @_;
+    delete $self->{firstParent};
+}
+
+sub getFirstParentColumn {
+    my ($self) = @_;
+    return $self->getColumn($self->{firstParent});
+}
+
 sub toString {
     my ($self) = @_;
     my @keys = $self->keys;
