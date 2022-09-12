@@ -16,6 +16,7 @@ sub new {
     my $self = bless({}, $class);
     $self->{archy} = Tree::CommitGraph::CommitArchy->new();
     $self->{printer} = Tree::CommitGraph::Printer->new();
+    $self->{graphlines} = Tree::CommitGraph::GraphLines->new();
     return $self;
 }
 
@@ -70,24 +71,32 @@ sub commit {
 
     # orphans
     if (defined $self->{orphaned} && $self->{orphaned} == $column->get($commit)) {
-        $self->{printer}->graph(verticals($column,
-                                          $nextcolumn,
-                                          exclude => $column->get($commit)));
+        $self->{printer}->graph($self->{graphlines}->verticals(
+            $column,
+            $nextcolumn,
+            exclude => $column->get($commit)
+        ));
         $self->{printer}->text('');
     }
     if (!defined $fparent) {
         $self->{orphaned} = $column->get($commit);
     }
 
-    $self->{printer}->graph(verticals($column,
-                                      $nextcolumn,
-                                      mark => $column->get($commit)));
-    $self->{printer}->graph(diagonals($column,
-                                      $nextcolumn,
-                                      currentcolumn => $column->get($commit)));
+    $self->{printer}->graph($self->{graphlines}->verticals(
+        $column,
+        $nextcolumn,
+        mark => $column->get($commit)
+    ));
+    $self->{printer}->graph($self->{graphlines}->diagonals(
+        $column,
+        $nextcolumn,
+        currentcolumn => $column->get($commit)
+    ));
     if (defined $nextnextcolumn) {
-        $self->{printer}->graph(diagonals($nextcolumn, $nextnextcolumn,
-                                          currentcolumn => $nextcolumn->get($commit)));
+        $self->{printer}->graph($self->{graphlines}->diagonals(
+            $nextcolumn, $nextnextcolumn,
+            currentcolumn => $nextcolumn->get($commit)
+        ));
     }
     $column->delete($commit);
     $nextcolumn->delete($commit);

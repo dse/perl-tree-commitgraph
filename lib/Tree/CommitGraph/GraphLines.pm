@@ -10,8 +10,14 @@ our %EXPORT_TAGS = (all => [@EXPORT_OK]);
 
 use List::Util qw(min max);
 
+sub new {
+    my ($class, %args) = @_;
+    my $self = bless({%args}, $class);
+    return $self;
+}
+
 sub verticals {
-    my ($state1, $state2, %args) = @_;
+    my ($self, $state1, $state2, %args) = @_;
     my $maxcol = max($state1->values, $state2->values);
     my @columns = $state1->values;
     my %columns = map { ($_ => 1) } @columns;
@@ -31,7 +37,7 @@ sub verticals {
 }
 
 sub diagonals {
-    my ($state1, $state2, %args) = @_;
+    my ($self, $state1, $state2, %args) = @_;
     my @state1 = $state1->values;
     my @state2 = $state2->values;
     my $maxcol = max($state1->values, $state2->values);
