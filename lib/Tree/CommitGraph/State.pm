@@ -22,17 +22,17 @@ sub setfrom {
     %{$self->hashref} = %{$source->hashref};
 }
 
-sub set {
+sub setColumn {
     my ($self, $commit, $column) = @_;
     $self->hashref->{$commit} = $column;
 }
 
-sub get {
+sub getColumn {
     my ($self, $commit) = @_;
     return $self->hashref->{$commit};
 }
 
-sub delete {
+sub deleteColumn {
     my ($self, $commit) = @_;
     delete $self->hashref->{$commit};
 }
