@@ -32,22 +32,24 @@ sub verticals {
 
 sub diagonals {
     my ($state1, $state2, %args) = @_;
+    my @state1 = $state1->values;
+    my @state2 = $state2->values;
     my $maxcol = max($state1->values, $state2->values);
     my $line1 = ' ' x (3 * $maxcol + 1);
     my $line2 = ' ' x (3 * $maxcol + 1);
-    my @commits = grep { defined $state2->{$_} } $state1->keys;
-    my @verticalcommits = grep { $state1->{$_} == $state2->{$_} } @commits;
-    my @diagonalcommits = grep { $state1->{$_} != $state2->{$_} } @commits;
+    my @commits = grep { defined $state2->get($_) } $state1->keys;
+    my @verticalcommits = grep { $state1->get($_) == $state2->get($_) } @commits;
+    my @diagonalcommits = grep { $state1->get($_) != $state2->get($_) } @commits;
     if (!scalar @diagonalcommits) {
         return;
     }
-    my @diagonalorigins = map { $state1->{$_} } @diagonalcommits;
+    my @diagonalorigins = map { $state1->get($_) } @diagonalcommits;
     my %diagonalorigins = map { ($_ => 1) } @diagonalorigins;
     if (scalar keys %diagonalorigins > 1) {
         die("unexpected");
     }
-    my @verticals = map { $state1->{$_} } @verticalcommits;
-    my @diagonals = map { $state2->{$_} } @diagonalcommits;
+    my @verticals = map { $state1->get($_) } @verticalcommits;
+    my @diagonals = map { $state2->get($_) } @diagonalcommits;
     my $currentcolumn = $diagonalorigins[0];
     my @left  = grep { $_ < $currentcolumn } @diagonals;
     my @right = grep { $_ > $currentcolumn } @diagonals;

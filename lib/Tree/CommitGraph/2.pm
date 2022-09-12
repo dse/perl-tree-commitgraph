@@ -26,79 +26,73 @@ sub commit {
     $self->{oparents} = \@oparents;
     my $column = $self->{column} //= Tree::CommitGraph::State->new();
     my $nextcolumn = $self->{nextcolumn} //= Tree::CommitGraph::State->new();
-    if (!defined $column->{$commit}) {
-        $column->{$commit} = $self->firstAvailableColumn($column->values, $nextcolumn->values);
+    if (!defined $column->get($commit)) {
+        $column->set($commit, $self->firstAvailableColumn($column->values, $nextcolumn->values));
         if (defined $fparent) {
-            $nextcolumn->{$commit} = $column->{$commit};
+            $nextcolumn->set($commit, $column->get($commit));
         }
     }
     my $nextnextcolumn;
     if (defined $fparent) {
-        if (!defined $column->{$fparent}) {
-            $column->{$fparent} = $column->{$commit};
-            $nextcolumn->{$fparent} = $column->{$commit};
+        if (!defined $column->get($fparent)) {
+            $column->set($fparent, $column->get($commit));
+            $nextcolumn->set($fparent, $column->get($commit));
         } else {
             my ($dominator, $submittor) = $self->{archy}->dominator($commit, $fparent);
             if (defined $dominator) {
-                print("# $dominator dominates $submittor\n");
-                $nextcolumn->{$commit}  = $column->{$dominator};
-                $nextcolumn->{$fparent} = $column->{$dominator};
+                $nextcolumn->set($commit,  $column->get($dominator));
+                $nextcolumn->set($fparent, $column->get($dominator));
             } else {
-                print("# $commit vs $fparent\n");
-                my $min = min($column->{$commit}, $column->{$fparent});
-                $nextcolumn->{$commit}  = $min;
-                $nextcolumn->{$fparent} = $min;
+                my $min = min($column->get($commit), $column->get($fparent));
+                $nextcolumn->set($commit, $min);
+                $nextcolumn->set($fparent, $min);
             }
-            if ($nextcolumn->{$commit} != $column->{$commit}) {
+            if ($nextcolumn->get($commit) != $column->get($commit)) {
                 $nextnextcolumn = $nextcolumn->clone();
-                $nextcolumn->{$commit} = $column->{$commit}; # intermediate state
+                $nextcolumn->set($commit, $column->get($commit)); # intermediate state
             }
         }
         foreach my $oparent (@oparents) {
-            if (!defined $column->{$oparent}) {
-                $column->{$oparent} = $column->{$commit};
-                $nextcolumn->{$oparent} = $self->firstAvailableColumn($column->values, $nextcolumn->values);
+            if (!defined $column->get($oparent)) {
+                $column->set($oparent, $column->get($commit));
+                $nextcolumn->set($oparent, $self->firstAvailableColumn($column->values, $nextcolumn->values));
             } else {
-                $nextcolumn->{$oparent} = $column->{$oparent};
+                $nextcolumn->set($oparent, $column->get($oparent));
             }
         }
     } else {
-        delete $nextcolumn->{$commit};
+        $nextcolumn->delete($commit);
     }
     if (defined $fparent) {
         $self->{archy}->addRelations($fparent, @oparents);
         $self->{archy}->replaceRelations($commit, $fparent);
     }
 
-    # print($column->toString() . "\n") if defined $column;
-    # print($nextcolumn->toString() . "\n") if defined $nextcolumn;
-    # print($nextnextcolumn->toString() . "\n") if defined $nextnextcolumn;
-
     # orphans
-    if (defined $self->{orphaned} && $self->{orphaned} == $column->{$commit}) {
+    if (defined $self->{orphaned} && $self->{orphaned} == $column->get($commit)) {
         $self->{printer}->graph(verticals($column,
                                           $nextcolumn,
-                                          exclude => $column->{$commit}));
+                                          exclude => $column->get($commit)));
         $self->{printer}->text('');
     }
     if (!defined $fparent) {
-        $self->{orphaned} = $column->{$commit};
+        $self->{orphaned} = $column->get($commit);
     }
 
     $self->{printer}->graph(verticals($column,
                                       $nextcolumn,
-                                      mark => $column->{$commit}));
+                                      mark => $column->get($commit)));
     $self->{printer}->graph(diagonals($column,
                                       $nextcolumn,
-                                      currentcolumn => $column->{$commit}));
+                                      currentcolumn => $column->get($commit)));
     if (defined $nextnextcolumn) {
         $self->{printer}->graph(diagonals($nextcolumn, $nextnextcolumn,
-                                          currentcolumn => $nextcolumn->{$commit}));
+                                          currentcolumn => $nextcolumn->get($commit)));
     }
-    delete $column->{$commit};
-    delete $nextcolumn->{$commit};
-    delete $nextnextcolumn->{$commit} if defined $nextnextcolumn;
-    %{$column} = %{$nextnextcolumn // $nextcolumn};
+    $column->delete($commit);
+    $nextcolumn->delete($commit);
+    $nextnextcolumn->delete($commit) if defined $nextnextcolumn;
+    $column->setfrom($nextnextcolumn // $nextcolumn);
 }
 
 sub firstAvailableColumn {

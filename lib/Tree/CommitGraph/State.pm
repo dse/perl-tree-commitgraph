@@ -7,29 +7,44 @@ sub new {
     my $self = bless({}, $class);
     my $source = $args{source};
     if (defined $source) {
-        %$self = %$source;
+        %{$self->hashref} = %{$source->hashref};
     }
     return $self;
 }
 
+sub hashref {
+    my ($self) = @_;
+    return $self->{commit} //= {};
+}
+
+sub setfrom {
+    my ($self, $source) = @_;
+    %{$self->hashref} = %{$source->hashref};
+}
+
 sub set {
     my ($self, $commit, $column) = @_;
-    $self->{$commit} = $column;
+    $self->hashref->{$commit} = $column;
 }
 
 sub get {
     my ($self, $commit) = @_;
-    return $self->{$commit};
+    return $self->hashref->{$commit};
+}
+
+sub delete {
+    my ($self, $commit) = @_;
+    delete $self->hashref->{$commit};
 }
 
 sub keys {
     my ($self) = @_;
-    return keys %$self;
+    return keys %{$self->hashref};
 }
 
 sub values {
     my ($self) = @_;
-    return values %$self;
+    return values %{$self->hashref};
 }
 
 sub clone {
@@ -41,7 +56,7 @@ sub toString {
     my ($self) = @_;
     my @keys = $self->keys;
     @keys = sort @keys;
-    return "$self " . join('; ', map { "$_ => $self->{$_}" } @keys);
+    return "$self " . join('; ', map { "$_ => " . $self->hashref->{$_} } @keys);
 }
 
 1;
