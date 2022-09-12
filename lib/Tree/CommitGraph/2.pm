@@ -2,209 +2,128 @@ package Tree::CommitGraph::2;
 use warnings;
 use strict;
 
-use base 'Exporter';
-
 use List::Util qw(min max);
 use Data::Dumper qw(Dumper);
+
+use lib "../..";
+use Tree::CommitGraph::CommitArchy;
+use Tree::CommitGraph::State;
+use Tree::CommitGraph::GraphLines qw(verticals diagonals);
+use Tree::CommitGraph::Printer;
 
 sub new {
     my ($class) = @_;
     my $self = bless({}, $class);
+    $self->{archy} = Tree::CommitGraph::CommitArchy->new();
+    $self->{printer} = Tree::CommitGraph::Printer->new();
     return $self;
 }
 
-our %column;
-our %nextcolumn;
-
 sub commit {
     my ($self, $commit, $fparent, @oparents) = @_;
-    my $legend = join(' ', grep { defined $_ } ($commit, $fparent, @oparents));
     $self->{commit} = $commit;
     $self->{fparent} = $fparent;
     $self->{oparents} = \@oparents;
-    local *column = \%{$self->{column} //= {}};
-    local *nextcolumn = \%{$self->{nextcolumn} //= {}};
-    if (!defined $column{$commit}) {
-        $column{$commit} = $self->firstAvailableColumn(%column, %nextcolumn);
+    my $column = $self->{column} //= Tree::CommitGraph::State->new();
+    my $nextcolumn = $self->{nextcolumn} //= Tree::CommitGraph::State->new();
+    if (!defined $column->{$commit}) {
+        $column->{$commit} = $self->firstAvailableColumn($column->values, $nextcolumn->values);
+        if (defined $fparent) {
+            $nextcolumn->{$commit} = $column->{$commit};
+        }
     }
-    $nextcolumn{$commit} = $column{$commit};
+    my $nextnextcolumn;
     if (defined $fparent) {
-        if (!defined $column{$fparent}) {
-            $nextcolumn{$fparent} = $column{$commit};
-        } elsif ($column{$commit} == $column{$fparent}) {
-            die("unexpected: $commit and $fparent are in the same column?\n");
+        if (!defined $column->{$fparent}) {
+            $column->{$fparent} = $column->{$commit};
+            $nextcolumn->{$fparent} = $column->{$commit};
         } else {
-            my ($winnercommit, $winnercolumn) = $self->mergePriorityWinner($commit, $fparent);
-            if (!defined $winnercommit) {
-                $nextcolumn{$commit} = $column{$fparent};
-                $nextcolumn{$fparent} = $column{$fparent};
-            } elsif ($winnercommit eq $fparent) {
-                $nextcolumn{$commit} = $column{$fparent};
-                $nextcolumn{$fparent} = $column{$fparent};
+            my ($dominator, $submittor) = $self->{archy}->dominator($commit, $fparent);
+            if (defined $dominator) {
+                print("# $dominator dominates $submittor\n");
+                $nextcolumn->{$commit}  = $column->{$dominator};
+                $nextcolumn->{$fparent} = $column->{$dominator};
             } else {
-                # fparent makes a diagonal move, not the commit
-                $nextcolumn{$commit} = $column{$commit};
-                $nextcolumn{$fparent} = $column{$commit};
+                print("# $commit vs $fparent\n");
+                my $min = min($column->{$commit}, $column->{$fparent});
+                $nextcolumn->{$commit}  = $min;
+                $nextcolumn->{$fparent} = $min;
+            }
+            if ($nextcolumn->{$commit} != $column->{$commit}) {
+                $nextnextcolumn = $nextcolumn->clone();
+                $nextcolumn->{$commit} = $column->{$commit}; # intermediate state
             }
         }
         foreach my $oparent (@oparents) {
-            if (!defined $column{$oparent}) {
-                $column{$oparent} = $column{$commit};
-                $nextcolumn{$oparent} = $self->firstAvailableColumn(%column, %nextcolumn);
+            if (!defined $column->{$oparent}) {
+                $column->{$oparent} = $column->{$commit};
+                $nextcolumn->{$oparent} = $self->firstAvailableColumn($column->values, $nextcolumn->values);
             } else {
-                $nextcolumn{$oparent} = $column{$oparent};
+                $nextcolumn->{$oparent} = $column->{$oparent};
             }
         }
     } else {
-        delete $nextcolumn{$commit};
+        delete $nextcolumn->{$commit};
     }
     if (defined $fparent) {
-        $self->replaceExistingMergePriorities($commit, $fparent, $column{$fparent});
-        $self->addMergePriority($fparent, @oparents);
+        $self->{archy}->addRelations($fparent, @oparents);
+        $self->{archy}->replaceRelations($commit, $fparent);
     }
-    my @vert;
-    my @diag;
-    my %diag2;
-    foreach my $c (keys %nextcolumn) {
-        my $c1 = $column{$c};     next unless defined $c1;
-        my $c2 = $nextcolumn{$c}; next unless defined $c2;
-        if ($c1 == $c2) {
-            push(@vert, $c1);
-        } elsif ($c1 == $column{$commit}) {
-            push(@diag, $c2);
-        } else {
-            push(@vert, $c1);
-            $diag2{$c1}{$c2} = 1;
-        }
+
+    # print($column->toString() . "\n") if defined $column;
+    # print($nextcolumn->toString() . "\n") if defined $nextcolumn;
+    # print($nextnextcolumn->toString() . "\n") if defined $nextnextcolumn;
+
+    # orphans
+    if (defined $self->{orphaned} && $self->{orphaned} == $column->{$commit}) {
+        $self->{printer}->graph(verticals($column,
+                                          $nextcolumn,
+                                          exclude => $column->{$commit}));
+        $self->{printer}->text('');
     }
-    # check for orphan
-    if (defined $self->{orphaned} && $self->{orphaned} == $column{$commit}) {
-        print($self->verticalLinesLine(grep { $_ != $column{$commit} } @vert));
-        print("\n");
+    if (!defined $fparent) {
+        $self->{orphaned} = $column->{$commit};
     }
-    my $line = $self->verticalLinesLine(@vert);
-    my $line0 = $line;          # this line
-    substr($line0, $column{$commit} * 3, 1) = '*';
-    $line0 .= ' ' x (max(16, 64 - length($line0)));
-    $line0 .= $legend;
-    print("$line0\n");
-    if (scalar @diag) {
-        my ($line1, $line2) = $self->applyDiagonals($line, $column{$commit}, @diag);
-        print("$line1\n") if defined $line1;
-        print("$line2\n") if defined $line2;
+
+    $self->{printer}->graph(verticals($column,
+                                      $nextcolumn,
+                                      mark => $column->{$commit}));
+    $self->{printer}->graph(diagonals($column,
+                                      $nextcolumn,
+                                      currentcolumn => $column->{$commit}));
+    if (defined $nextnextcolumn) {
+        $self->{printer}->graph(diagonals($nextcolumn, $nextnextcolumn,
+                                          currentcolumn => $nextcolumn->{$commit}));
     }
-    if (scalar keys %diag2) {
-        foreach my $c1 (keys %diag2) {
-            @vert = grep { $_ ne $c1 } @vert;
-            $line = $self->verticalLinesLine(@vert);
-            my ($line1, $line2) = $self->applyDiagonals($line, $c1, keys %{$diag2{$c1}});
-            print("$line1\n") if defined $line1;
-            print("$line2\n") if defined $line2;
-        }
-    }
-    if (defined $fparent) {
-        $self->{orphaned} = undef;
-    } else {
-        $self->{orphaned} = $column{$commit};
-    }
-    delete $column{$commit};
-    delete $nextcolumn{$commit};
-    %column = %nextcolumn;
+    delete $column->{$commit};
+    delete $nextcolumn->{$commit};
+    delete $nextnextcolumn->{$commit} if defined $nextnextcolumn;
+    %{$column} = %{$nextnextcolumn // $nextcolumn};
 }
 
 sub firstAvailableColumn {
-    my ($self, %column) = @_;
-    my @columns = values(%column);
+    my ($self, @columns) = @_;
     my %columns = map { ($_ => 1) } @columns;
     for (my $i = 0; ; $i += 1) {
         return $i if !$columns{$i};
     }
 }
 
-sub verticalLinesLine {
-    my ($self, @columns) = @_;
-    our %column;     local *column     = \%{$self->{column} //= {}};
-    our %nextcolumn; local *nextcolumn = \%{$self->{nextcolumn} //= {}};
-    my $maxcolumn = max(values(%nextcolumn), values(%column));
-    my $line = ' ' x ($maxcolumn * 3 + 1);
-    foreach my $column (@columns) {
-        substr($line, $column * 3, 1) = '|';
-    }
-    return $line;
+sub graph {
+    my ($self, @lines) = @_;
+    $self->{printer}->graph(@lines);
+    $self->{printer}->out();
 }
 
-sub applyDiagonals {
-    my ($self, $line, $from, @drawto) = @_;
-    my $line1 = $line;
-    my $line2 = $line;
-    my @left  = grep { $_ < $from } @drawto;
-    my @right = grep { $_ > $from } @drawto;
-    if (!scalar @left && !scalar @right) {
-        return;
-    }
-    if (scalar @left) {
-        substr($line1, 3 * $from - 1, 1) = '/';
-        my $minleft = min(@drawto);
-        if ($minleft <= $from - 2) {
-            my $pos1 = $minleft * 3 + 2;
-            my $pos2 = $from * 3 - 2;
-            for (my $p = $pos1; $p <= $pos2; $p += 1) {
-                substr($line1, $p, 1) = '_' if substr($line1, $p, 1) eq ' ';
-            }
-        }
-        foreach my $left (@left) {
-            substr($line2, 3 * $left + 1, 1) = '/';
-        }
-    }
-    if (scalar @right) {
-        substr($line1, 3 * $from + 1, 1) = '\\';
-        my $maxright = max(@drawto);
-        if ($maxright >= $from + 2) {
-            my $pos1 = $from * 3 + 2;
-            my $pos2 = $maxright * 3 - 2;
-            for (my $p = $pos1; $p <= $pos2; $p += 1) {
-                substr($line1, $p, 1) = '_' if substr($line1, $p, 1) eq ' ';
-            }
-        }
-        foreach my $right (@right) {
-            substr($line2, 3 * $right - 1, 1) = '\\';
-        }
-    }
-    return ($line1, $line2);
+sub text {
+    my ($self, @lines) = @_;
+    $self->{printer}->text(@lines);
+    $self->{printer}->out();
 }
 
-sub mergePriorityWinner {
-    my ($self, $a, $b) = @_;
-    foreach my $merge (@{$self->{merge}}) {
-        if ($merge->[0] eq $a && $merge->[1] eq $b) {
-            return ($merge->[2], $merge->[3]);
-        }
-    }
-    return;
-}
-
-sub addMergePriority {
-    my ($self, $fparent, @oparents) = @_;
-    foreach my $oparent (@oparents) {
-        push(@{$self->{merge}}, [$fparent, $oparent, $fparent, $column{$fparent}]);
-        push(@{$self->{merge}}, [$oparent, $fparent, $fparent, $column{$fparent}]);
-    }
-}
-
-sub replaceExistingMergePriorities {
-    my ($self, $commit, $fparent, $fparentcolumn) = @_;
-    foreach my $merge (@{$self->{merge}}) {
-        if ($merge->[0] eq $commit) {
-            $merge->[0] = $fparent;
-        }
-        if ($merge->[1] eq $commit) {
-            $merge->[1] = $fparent;
-        }
-        if ($merge->[2] eq $commit) {
-            $merge->[2] = $fparent;
-            $merge->[3] = $fparentcolumn;
-        }
-    }
+sub flush {
+    my ($self) = @_;
+    $self->{printer}->flush();
 }
 
 1;
