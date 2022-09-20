@@ -17,11 +17,22 @@ sub new {
     $self->{archy} = Tree::CommitGraph::CommitArchy->new();
     $self->{printer} = Tree::CommitGraph::Printer->new();
     $self->{graphlines} = Tree::CommitGraph::GraphLines->new();
+    # $self->{verbosity}
+    # $self->{showParents}
+    # $self->{stdin}
+    # $self->{wrapColumns}
+    # $self->{isatty}
     return $self;
 }
 
+sub debug {
+    my ($self, $format, @args) = @_;
+    printf("$format\n", @args);
+}
+
 sub commit {
-    my ($self, $commit, $firstParent, @otherParents) = @_;
+    my ($self, @commit) = @_;
+    my ($commit, $firstParent, @otherParents) = @commit;
     $self->{commit} = $commit;
     $self->{firstParent} = $firstParent;
     $self->{otherParents} = \@otherParents;
