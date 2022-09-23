@@ -13,7 +13,7 @@ use constant WILLDIE  => 4;
 use fields qw(padding mark revmark isatty started columnWidth compactify compactifyContextLines);
 
 use lib "..";                   # for emacs
-use Tree::CommitGraph::Util qw(clone stringLengthExcludingControlSequences terminalPadEnd);
+use Tree::CommitGraph::Util qw(clone noctlseqs terminalPadEnd);
 
 sub new {
     my ($class) = @_;
@@ -115,7 +115,7 @@ sub printCommitLine {
         $graphLine = $self->{graphContinuationLine};
     }
     $graphLine .= '  ';
-    my $length = stringLengthExcludingControlSequences($graphLine);
+    my $length = length(noctlseqs($graphLine));
     my $additionalSpaceCount = $self->{padding} - $length;
     if ($additionalSpaceCount > 0) {
         $graphLine .= ' ' x $additionalSpaceCount;
