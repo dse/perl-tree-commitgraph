@@ -9,6 +9,7 @@ sub new {
         text => [],
         mincol => 24,
         minspace => 6,
+        fill => '',
     }, $class);
     return $self;
 }
@@ -21,6 +22,11 @@ sub graph {
 sub text {
     my ($self, @lines) = @_;
     push(@{$self->{text}}, @lines);
+}
+
+sub fill {
+    my ($self, $fill) = @_;
+    $self->{fill} = $fill;
 }
 
 sub out {
@@ -44,7 +50,7 @@ sub flush {
     if (scalar @{$self->{text}}) {
         while (scalar @{$self->{text}}) {
             my $text = shift(@{$self->{text}});
-            $self->lineout('', $text);
+            $self->lineout($self->{fill}, $text);
         }
     }
 }
