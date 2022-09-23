@@ -17,21 +17,22 @@ sub new {
     $self->{archy} = Tree::CommitGraph::CommitArchy->new();
     $self->{printer} = Tree::CommitGraph::Printer->new();
     $self->{graphlines} = Tree::CommitGraph::GraphLines->new();
-    # $self->{verbosity}
-    # $self->{showParents}
-    # $self->{stdin}
-    # $self->{wrapColumns}
-    # $self->{isatty}
+    # $self->{verbosity} = ...
+    # $self->{showParents} = ...
+    # $self->{stdin} = ...
+    # $self->{wrapColumns} = ...
+    # $self->{isatty} = ...
     return $self;
 }
 
 sub debug {
-    my ($self, $format, @args) = @_;
+    my ($format, @args) = @_;
     printf("$format\n", @args);
 }
 
 sub commit {
     my ($self, @commit) = @_;
+    # debug("commit @commit");
     my ($commit, $firstParent, @otherParents) = @commit;
     $self->{commit} = $commit;
     $self->{firstParent} = $firstParent;
@@ -53,7 +54,7 @@ sub commit {
         } else {
             my ($dominator, $submittor) = $self->{archy}->dominator($commit, $firstParent);
             if (defined $dominator) {
-                $nextState->setColumn($commit,  $thisState->getColumn($dominator));
+                $nextState->setColumn($commit, $thisState->getColumn($dominator));
                 $nextState->setColumn($firstParent, $thisState->getColumn($dominator));
             } else {
                 my $min = min($thisState->getColumn($commit), $thisState->getColumn($firstParent));
@@ -64,6 +65,10 @@ sub commit {
                 $nextNextState = $nextState->clone();
                 $nextState->setColumn($commit, $thisState->getColumn($commit)); # intermediate state
                 $nextState->setFirstParent($firstParent);
+            } elsif ($nextState->getColumn($firstParent) != $thisState->getColumn($firstParent)) {
+                $nextNextState = $nextState->clone();
+                $nextState->setColumn($firstParent, $thisState->getColumn($firstParent)); # intermediate state
+                $nextState->setFirstParent($firstParent);
             }
         }
         foreach my $otherParent (@otherParents) {
@@ -73,16 +78,29 @@ sub commit {
             } else {
                 $nextState->setColumn($otherParent, $thisState->getColumn($otherParent));
             }
+            if (defined $nextNextState) {
+                $nextNextState->setColumn($otherParent, $nextState->getColumn($otherParent));
+            }
         }
     } else {
         $nextState->deleteColumn($commit);
     }
+
+    # debug("finalized");
+    # debug("    this state:  %s", $thisState->toString());
+    # debug("    next state:  %s", $nextState->toString());
+    # debug("    nnext state: %s", $nextNextState->toString()) if defined $nextNextState;
+
     if (defined $firstParent) {
         $self->{archy}->addRelations($firstParent, @otherParents);
         $self->{archy}->replaceRelations($commit, $firstParent);
     }
 
     my $thisColumn = $thisState->getColumn($commit);
+
+    my $finalState = $nextNextState // $nextState;
+
+    $self->{printer}->fill($self->verticals($finalState, $finalState));
 
     # orphans
     if (defined $self->{orphaned} && $self->{orphaned} == $thisColumn) {
@@ -108,7 +126,15 @@ sub commit {
     $nextState->deleteFirstParent();
     $nextNextState->deleteFirstParent() if defined $nextNextState;
 
-    $thisState->setfrom($nextNextState // $nextState);
+    if (defined $nextNextState) {
+        $thisState->setfrom($nextNextState);
+        $nextState->setfrom($nextNextState);
+    } else {
+        $thisState->setfrom($nextState);
+    }
+    # debug("end of iteration");
+    # debug("    this state:         %s", $thisState->toString());
+    # debug("    next state:         %s", $nextState->toString());
 }
 
 # delegates
