@@ -5,7 +5,10 @@ use strict;
 use base 'Exporter';
 
 our @EXPORT = qw();
-our @EXPORT_OK = qw(clone stringLengthExcludingControlSequences terminalPadEnd diagonalsAndLines);
+our @EXPORT_OK = qw(noctlseqs
+                    clone
+                    terminalPadEnd
+                    diagonalsAndLines);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
 sub clone {
@@ -26,20 +29,20 @@ sub clone {
     return $obj;
 }
 
-sub stringLengthExcludingControlSequences {
-    my ($string) = @_;
-    $string =~ s{\e\[.*?m}{}g;
-    return length($string);
-}
-
 sub terminalPadEnd {
     my ($string, $cols) = @_;
-    my $length = stringLengthExcludingControlSequences($string);
+    my $length = length(noctlseqs($string));
     my $add = $cols - $length;
     if ($add > 0) {
         return $string . (' ' x $add);
     }
     return $string;
+}
+
+sub noctlseqs {
+    my ($line) = @_;
+    $line =~ s{\e\[(?:\d+(?:\;\d+)*)?m}{}gx;
+    return $line;
 }
 
 use List::Util qw(max);
