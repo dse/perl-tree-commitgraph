@@ -2,6 +2,9 @@ package Tree::CommitGraph::Printer;
 use warnings;
 use strict;
 
+use lib "../..";
+use Tree::CommitGraph::Util qw(noctlseqs);
+
 sub new {
     my ($class) = @_;
     my $self = bless({
@@ -61,7 +64,8 @@ sub lineout {
         print("$graph\n");
     } else {
         $graph .= ' ' x $self->{minspace};
-        printf("%-*s%s\n", $self->{mincol}, $graph, $text);
+        $graph .= ' ' x ($self->{mincol} - length(noctlseqs($graph)));
+        print("$graph$text\n");
     }
 }
 
