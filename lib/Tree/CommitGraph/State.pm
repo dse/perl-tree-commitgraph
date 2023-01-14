@@ -67,11 +67,6 @@ sub deleteFirstParent {
     delete $self->{firstParent};
 }
 
-sub getFirstParentColumn {
-    my ($self) = @_;
-    return $self->getColumn($self->{firstParent});
-}
-
 sub toString {
     my ($self) = @_;
     my @keys = $self->keys;

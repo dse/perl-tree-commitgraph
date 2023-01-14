@@ -64,7 +64,7 @@ sub commit {
             if ($nextState->getColumn($commit) != $thisState->getColumn($commit)) {
                 $nextNextState = $nextState->clone();
                 $nextState->setColumn($commit, $thisState->getColumn($commit)); # intermediate state
-                $nextState->setFirstParent($firstParent);
+                $nextState->setFirstParent($firstParent); # intermediate state
             } elsif ($nextState->getColumn($firstParent) != $thisState->getColumn($firstParent)) {
                 $nextNextState = $nextState->clone();
                 $nextState->setColumn($firstParent, $thisState->getColumn($firstParent)); # intermediate state
@@ -72,11 +72,11 @@ sub commit {
             }
         }
         foreach my $otherParent (@otherParents) {
-            if (!defined $thisState->getColumn($otherParent)) {
+            if (defined $thisState->getColumn($otherParent)) {
+                $nextState->setColumn($otherParent, $thisState->getColumn($otherParent));
+            } else {
                 $thisState->setColumn($otherParent, $thisState->getColumn($commit));
                 $nextState->setColumn($otherParent, $self->firstAvailableColumn($thisState->values, $nextState->values));
-            } else {
-                $nextState->setColumn($otherParent, $thisState->getColumn($otherParent));
             }
             if (defined $nextNextState) {
                 $nextNextState->setColumn($otherParent, $nextState->getColumn($otherParent));
@@ -85,11 +85,6 @@ sub commit {
     } else {
         $nextState->deleteColumn($commit);
     }
-
-    # debug("finalized");
-    # debug("    this state:  %s", $thisState->toString());
-    # debug("    next state:  %s", $nextState->toString());
-    # debug("    nnext state: %s", $nextNextState->toString()) if defined $nextNextState;
 
     if (defined $firstParent) {
         $self->{archy}->addRelations($firstParent, @otherParents);
@@ -125,6 +120,10 @@ sub commit {
     $thisState->deleteFirstParent();
     $nextState->deleteFirstParent();
     $nextNextState->deleteFirstParent() if defined $nextNextState;
+
+    print($thisState->toString(), "\n");
+    print($nextState->toString(), "\n");
+    print($nextNextState->toString(), "\n") if defined $nextNextState;
 
     if (defined $nextNextState) {
         $thisState->setfrom($nextNextState);
